@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\esp32_stub.json" />
+    <EmbeddedResource Include="Resources\esp32s3_stub.json" />
+    <EmbeddedResource Include="Resources\esp32c6_stub.json" />
+    <EmbeddedResource Include="Resources\esp32c3_stub.json" />
+  </ItemGroup>
+
+</Project>

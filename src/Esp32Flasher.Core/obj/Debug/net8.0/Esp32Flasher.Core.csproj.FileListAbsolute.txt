@@ -1,0 +1,12 @@
+G:\Dev\esp32\src\Esp32Flasher.Core\bin\Debug\net8.0\Esp32Flasher.Core.deps.json
+G:\Dev\esp32\src\Esp32Flasher.Core\bin\Debug\net8.0\Esp32Flasher.Core.dll
+G:\Dev\esp32\src\Esp32Flasher.Core\bin\Debug\net8.0\Esp32Flasher.Core.pdb
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.csproj.AssemblyReference.cache
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.GeneratedMSBuildEditorConfig.editorconfig
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.AssemblyInfoInputs.cache
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.AssemblyInfo.cs
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.csproj.CoreCompileInputs.cache
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.dll
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\refint\Esp32Flasher.Core.dll
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.pdb
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\ref\Esp32Flasher.Core.dll

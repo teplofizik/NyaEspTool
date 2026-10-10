@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Esp32Flasher.Cli/Esp32Flasher.Cli.csproj" />
+    <Project Path="src/Esp32Flasher.Core/Esp32Flasher.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Esp32Flasher.Core.Tests/Esp32Flasher.Core.Tests.csproj" />
+  </Folder>
+</Solution>
