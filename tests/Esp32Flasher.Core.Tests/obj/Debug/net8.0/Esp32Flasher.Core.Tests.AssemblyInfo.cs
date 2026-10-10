@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Esp32Flasher.Core.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e7704d612af4d5fa2d4ac00590af8938ca60b30c")]
 [assembly: System.Reflection.AssemblyProductAttribute("Esp32Flasher.Core.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Esp32Flasher.Core.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

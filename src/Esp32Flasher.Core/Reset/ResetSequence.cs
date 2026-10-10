@@ -33,4 +33,29 @@ public static class ResetSequence
         transport.Rts = false;
         await Task.Delay(postReleaseDelay, cancellationToken).ConfigureAwait(false);
     }
+
+    public static async Task UsbJtagAsync(ISerialTransport transport, CancellationToken cancellationToken = default)
+    {
+        SetRts(transport, false);
+        transport.Dtr = false;
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+
+        transport.Dtr = true;
+        SetRts(transport, false);
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+
+        SetRts(transport, true);
+        transport.Dtr = false;
+        SetRts(transport, true);
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+
+        transport.Dtr = false;
+        SetRts(transport, false);
+    }
+
+    private static void SetRts(ISerialTransport transport, bool state)
+    {
+        transport.Rts = state;
+        transport.Dtr = transport.Dtr;
+    }
 }

@@ -1,7 +1,8 @@
-# Serial Protocol — что реализуем (кратко по существу)
+# Serial Protocol — что реализовано
 
 Источник: https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/serial-protocol.html
-(и `esptool/targets/esp32.py`, `stub_flasher_32.json`). Здесь — только то, что нужно для MVP.
+и `esptool/targets/*`. Здесь описаны части протокола, реализованные в проекте
+(ESP32, ESP32-S3, ESP32-C3, ESP32-C6).
 
 ## 1. Транспорт
 
@@ -25,6 +26,26 @@ DTR=0 (IO0 high)          # отпускаем
 
 Затем ждём boot-лог на 115200 и начинаем `SYNC`. Если авто-reset не сработал —
 режим `no_reset`: пользователь сам держит BOOT при подаче питания.
+
+### USB-Serial-JTAG reset (`usb_reset`)
+
+Для чипов, подключённых через **встроенный USB-Serial-JTAG** (S3/C3/C6), DTR/RTS не
+подключены к GPIO0/EN — reset выполняется специальной последовательностью (esptool
+`USBJTAGSerialReset`):
+
+```
+RTS=0; DTR=0            # idle
+sleep 100ms
+DTR=1; RTS=0            # set IO0
+sleep 100ms
+RTS=1; DTR=0; RTS=1     # reset (RTS re-set, т.к. Windows продвигает DTR только с RTS)
+sleep 100ms
+DTR=0; RTS=0            # chip out of reset
+```
+
+После этого устройство **перечислится** (USB отваливается и появляется снова): нужно
+закрыть и заново открыть порт (с ретраями), только потом слать `SYNC`. Это реализовано
+в `ReopenAfterUsbResetAsync`.
 
 ## 3. SLIP-фрейминг
 
@@ -100,19 +121,34 @@ DTR=0 (IO0 high)          # отпускаем
 1. Открыть порт (115200), сделать ClassicReset, подождать ~100ms.
 2. Слать `SYNC` (payload из 36 байт) с интервалом ~100ms, пока не получим валидный ответ
    (ответ вида `01 08 04 00 07 12 55 55 00 00`). Обычно достаточно 3-7 попыток.
-3. Определить чип: `READ_REG(0x40001000)`.
-   - ESP32 → `0x00F01D83`.
-   - (для будущих чипов — свой magic либо `GET_SECURITY_INFO 0x14`).
+3. Определить чип:
+   - Сначала `GET_SECURITY_INFO (0x14)` (пустой payload). Ответ (20 байт):
+     `flags(4)`, `flash_crypt_cnt(1)`, `key_purposes(7)`, `chip_id(4)` по offset 12,
+     `api_version(4)`. Если команда не поддержана — короткий таймаут и переход к magic.
+   - Fallback: `READ_REG(0x40001000)` — magic-регистр (`CHIP_DETECT_MAGIC_REG_ADDR`).
+   - ESP32 → `0x00F01D83`; S3/C3/C6 magic не используют (только chip-id).
 4. (ROM) `SPI_ATTACH(0)`, `SPI_SET_PARAMS(...)`.
 5. Загрузить stub (см. §9) → дождаться `OHAI`.
 6. (опц.) `CHANGE_BAUDRATE(new, old)`, затем сменить baud у порта и `flush_input()`.
 7. Далее все команды идут на stub loader.
 
+**Таблица чипов:**
+
+| Чип | chip-id | magic | bootloader offset | SPI base | MAC |
+| --- | --- | --- | --- | --- | --- |
+| ESP32 | — | `0x00F01D83` | `0x1000` | `0x3FF42000` | efuse words 1/2 |
+| ESP32-S3 | 9 | — | `0x0` | `0x60002000` | `0x60007044` |
+| ESP32-C3 | 5 | — | `0x0` | `0x60002000` | `0x60008844` |
+| ESP32-C6 | 13 | — | `0x0` | `0x60003000` | `0x600B0844` |
+
+`flash-id` (`READ_FLASH_ID`, команда `0x9F` RDID) реализован через манипуляцию регистрами
+SPI-периферии (`RunSpiFlashCommandAsync`), а не отдельной командой загрузчика.
+
 ## 9. Загрузка stub loader (RAM download)
 
-- Источник сегментов: `esptool/targets/stub_flasher/2/esp32.json` (лицензия MIT/Apache,
-  встраивается как `Resources/esp32_stub.json`): поля `entry`, `text`, `text_start`,
-  `data`, `data_start`, `bss_start` (bss обычно не грузим).
+- Источник сегментов: `esptool/targets/stub_flasher/2/{esp32,esp32s3,esp32c6,esp32c3}.json`
+  (лицензия MIT/Apache), встраиваются как `Resources/*_stub.json`. Поля: `entry`, `text`,
+  `text_start`, `data`, `data_start`, `bss_start` (bss обычно не грузим). Выбор блоба — по чипу.
 - Формируем последовательность:
   1. `MEM_BEGIN(total_size, num_packets, packet_size=0x4000, mem_offset=text_start)`
   2. `MEM_DATA` для каждого блока (16 КБ), checksum обязательна.
@@ -143,15 +179,17 @@ DTR=0 (IO0 high)          # отпускаем
 
 ## 12. Верификация
 
-- После записи образа: `SPI_FLASH_MD5(offset, size, 0, 0)`.
-- Сравнить с MD5 исходных данных (**до** паддинга `0xFF` — на чипе `FLASH_END`/erase вернёт
-  реальное содержимое; в esptool сравнивается MD5 записанных байт без паддинга). Проверять
-  подробно по эталону `esptool/flash_verify`.
-- На stub ответ = 16 сырых байт; на ROM = 32 hex-символа.
+- Данные выравниваются до кратности 4 (`image_size`); MD5 считается по этим `image_size`
+  байтам. Последний блок «по проводу» дополняется `0xFF` до 16 КБ, но в MD5 эти байты
+  не входят.
+- После записи: `SPI_FLASH_MD5(offset, image_size, 0, 0)` → сравнить с `MD5(image)`.
+- На stub ответ = 16 сырых байт (+ 2 байта статуса); на ROM = 32 hex-символа.
+- Таймаут команды масштабируется: ~`8 сек/МБ`.
 
 ## 13. Чтение flash (stub, `READ_FLASH 0xd2`)
 
-1. `READ_FLASH(offset, read_len, sector_size=4096, packet_size, max_in_flight)`.
+1. `READ_FLASH` payload — 4 слова: `offset`, `length`, `sector_size=0x1000`, `max_in_flight=64`.
+   Каждый data-кадр — `sector_size` байт.
 2. Чип шлёт **сырые** SLIP-пакеты с данными (без заголовка/метаданных).
 3. После каждого принятого пакета host шлёт 4-байтный raw ack (число принятых байт).
 4. В конце чип шлёт 16-байтный MD5 всего прочитанного (тоже raw SLIP-пакет).
@@ -165,3 +203,8 @@ DTR=0 (IO0 high)          # отпускаем
   не читать до открытия, при необходимости явно снять линии.
 - После `CHANGE_BAUDRATE` надо почистить входной буфер (мусор на смене baud).
 - Поле `total_size` в `SPI_SET_PARAMS` при неверном значении ломает запись на чипах >4 МБ.
+- **USB-JTAG**: после reset порт перечислится — его надо закрыть/переоткрыть (иначе
+  `BaseStream is only available when the port is open`).
+- `DiscardInBuffer()` во время активного async-чтения аварийно завершает read-pump —
+  не вызывать при работающем чтении (вместо этого сбрасываем SLIP-декодер).
+- Чтение стартует только после reset (иначе pump умирает при перечислении USB).

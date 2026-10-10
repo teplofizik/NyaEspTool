@@ -30,8 +30,7 @@
 Через наш CLI:
 
 ```
-esp32flash flash --port COM5 --chip esp32 --baud 921600 -z \
-  --flash-size detect --flash-mode dio --flash-freq 80m \
+esp32flash flash --port COM5 --flash-size detect --flash-mode dio --flash-freq 80m \
   0x1000 bootloader.bin \
   0x8000 partitions.bin \
   0xe000 boot_app0.bin \
@@ -48,10 +47,14 @@ esptool.py --chip esp32 --port COM5 --baud 921600 \
 ```
 
 Почему такие опции:
-- `--flash-mode dio` / `--flash-freq 80m` — «правит» заголовок bootloader-образа и
-  пересчитывает SHA256; используется то же значение, что при сборке.
-- `-z` — deflate-сжатие (в нашем MVP — опционально).
+- `--flash-mode dio` / `--flash-freq 80m` — «правят» заголовок bootloader-образа и
+  пересчитывают SHA256; используются значения из сборки.
 - `--flash-size detect` — определить размер по JEDEC ID (для CAM обычно 4 МБ).
+- Скорость: SYNC идёт на `115200` (по умолчанию), после загрузки stub — на `--flash-baud`
+  (по умолчанию `921600`). Можно поднять `--baud`, но не все адаптеры это любят.
+- `-z` (deflate) в нашем CLI пока не поддерживается — запись несжатая.
+
+> Для S3/C3/C6 тот же подход, но bootloader лежит по offset `0x0` (не `0x1000`).
 
 ## 4. Backup / restore
 

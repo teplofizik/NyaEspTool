@@ -60,7 +60,7 @@ public sealed class SystemSerialTransport : ISerialTransport
         {
             lock (_sync)
             {
-                if (_port is not null)
+                if (_port is { IsOpen: true })
                 {
                     _port.DtrEnable = value;
                 }
@@ -81,7 +81,7 @@ public sealed class SystemSerialTransport : ISerialTransport
         {
             lock (_sync)
             {
-                if (_port is not null)
+                if (_port is { IsOpen: true })
                 {
                     _port.RtsEnable = value;
                 }

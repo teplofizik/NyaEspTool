@@ -10,3 +10,4 @@ G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.dll
 G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\refint\Esp32Flasher.Core.dll
 G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.pdb
 G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\ref\Esp32Flasher.Core.dll
+G:\Dev\esp32\src\Esp32Flasher.Core\obj\Debug\net8.0\Esp32Flasher.Core.sourcelink.json

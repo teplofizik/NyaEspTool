@@ -1,4 +1,4 @@
-﻿using Esp32Flasher.Core;
+using Esp32Flasher.Core;
 using Esp32Flasher.Core.Chips;
 using Esp32Flasher.Core.Errors;
 using Esp32Flasher.Core.Imaging;
@@ -63,9 +63,9 @@ static async Task<int> ChipInfoCommandAsync(string[] args)
 {
     string? port = null;
     bool trace = false;
-    bool noReset = false;
     bool noStub = false;
     int baud = 115200;
+    ResetMode before = ResetMode.Default;
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -81,7 +81,15 @@ static async Task<int> ChipInfoCommandAsync(string[] args)
                 trace = true;
                 break;
             case "--no-reset":
-                noReset = true;
+                before = ResetMode.NoReset;
+                break;
+            case "--before":
+                if (!TryParseBefore(args[++i], out before))
+                {
+                    Console.Error.WriteLine($"Invalid --before: {args[i - 1]}");
+                    return 2;
+                }
+
                 break;
             case "--no-stub":
                 noStub = true;
@@ -104,7 +112,7 @@ static async Task<int> ChipInfoCommandAsync(string[] args)
         InitialBaud = baud,
         FlashBaud = null,
         LoadStub = !noStub,
-        BeforeReset = noReset ? ResetMode.NoReset : ResetMode.Default,
+        BeforeReset = before,
         Trace = trace ? PrintTrace : null,
     };
 
@@ -140,7 +148,7 @@ static async Task<int> FlashCommandAsync(string[] args)
     int? flashBaud = 921600;
     bool noStub = false;
     bool noVerify = false;
-    bool noReset = false;
+    ResetMode before = ResetMode.Default;
     string flashModeArg = "keep";
     string flashFreqArg = "keep";
     string flashSizeArg = "keep";
@@ -175,7 +183,15 @@ static async Task<int> FlashCommandAsync(string[] args)
                 noVerify = true;
                 break;
             case "--no-reset":
-                noReset = true;
+                before = ResetMode.NoReset;
+                break;
+            case "--before":
+                if (!TryParseBefore(args[++i], out before))
+                {
+                    Console.Error.WriteLine($"Invalid --before: {args[i - 1]}");
+                    return 2;
+                }
+
                 break;
             case "--chip":
                 i++;
@@ -224,7 +240,7 @@ static async Task<int> FlashCommandAsync(string[] args)
         InitialBaud = baud,
         FlashBaud = flashBaud,
         LoadStub = !noStub,
-        BeforeReset = noReset ? ResetMode.NoReset : ResetMode.Default,
+        BeforeReset = before,
     };
 
     var progress = new Progress<FlashProgress>(PrintProgress);
@@ -305,7 +321,7 @@ static async Task<int> ReadFlashCommandAsync(string[] args)
     int baud = 115200;
     int? flashBaud = 921600;
     bool noStub = false;
-    bool noReset = false;
+    ResetMode before = ResetMode.Default;
     var positional = new List<string>();
 
     for (int i = 0; i < args.Length; i++)
@@ -329,7 +345,15 @@ static async Task<int> ReadFlashCommandAsync(string[] args)
                 noStub = true;
                 break;
             case "--no-reset":
-                noReset = true;
+                before = ResetMode.NoReset;
+                break;
+            case "--before":
+                if (!TryParseBefore(args[++i], out before))
+                {
+                    Console.Error.WriteLine($"Invalid --before: {args[i - 1]}");
+                    return 2;
+                }
+
                 break;
             default:
                 if (args[i].StartsWith("--", StringComparison.Ordinal))
@@ -359,7 +383,7 @@ static async Task<int> ReadFlashCommandAsync(string[] args)
         InitialBaud = baud,
         FlashBaud = flashBaud,
         LoadStub = !noStub,
-        BeforeReset = noReset ? ResetMode.NoReset : ResetMode.Default,
+        BeforeReset = before,
     };
 
     var progress = new Progress<FlashProgress>(PrintProgress);
@@ -377,7 +401,7 @@ static async Task<int> EraseFlashCommandAsync(string[] args)
     int baud = 115200;
     int? flashBaud = 921600;
     bool noStub = false;
-    bool noReset = false;
+    ResetMode before = ResetMode.Default;
     bool force = false;
 
     for (int i = 0; i < args.Length; i++)
@@ -397,7 +421,15 @@ static async Task<int> EraseFlashCommandAsync(string[] args)
                 noStub = true;
                 break;
             case "--no-reset":
-                noReset = true;
+                before = ResetMode.NoReset;
+                break;
+            case "--before":
+                if (!TryParseBefore(args[++i], out before))
+                {
+                    Console.Error.WriteLine($"Invalid --before: {args[i - 1]}");
+                    return 2;
+                }
+
                 break;
             case "--force":
                 force = true;
@@ -426,7 +458,7 @@ static async Task<int> EraseFlashCommandAsync(string[] args)
         InitialBaud = baud,
         FlashBaud = flashBaud,
         LoadStub = !noStub,
-        BeforeReset = noReset ? ResetMode.NoReset : ResetMode.Default,
+        BeforeReset = before,
     };
 
     await using Esp32Connection connection = await Esp32Connection.OpenAsync(options);
@@ -442,7 +474,7 @@ static async Task<int> EraseRegionCommandAsync(string[] args)
     int baud = 115200;
     int? flashBaud = 921600;
     bool noStub = false;
-    bool noReset = false;
+    ResetMode before = ResetMode.Default;
     var positional = new List<string>();
 
     for (int i = 0; i < args.Length; i++)
@@ -462,7 +494,15 @@ static async Task<int> EraseRegionCommandAsync(string[] args)
                 noStub = true;
                 break;
             case "--no-reset":
-                noReset = true;
+                before = ResetMode.NoReset;
+                break;
+            case "--before":
+                if (!TryParseBefore(args[++i], out before))
+                {
+                    Console.Error.WriteLine($"Invalid --before: {args[i - 1]}");
+                    return 2;
+                }
+
                 break;
             default:
                 if (args[i].StartsWith("--", StringComparison.Ordinal))
@@ -491,7 +531,7 @@ static async Task<int> EraseRegionCommandAsync(string[] args)
         InitialBaud = baud,
         FlashBaud = flashBaud,
         LoadStub = !noStub,
-        BeforeReset = noReset ? ResetMode.NoReset : ResetMode.Default,
+        BeforeReset = before,
     };
 
     await using Esp32Connection connection = await Esp32Connection.OpenAsync(options);
@@ -537,7 +577,7 @@ static async Task<int> FlashIdCommandAsync(string[] args)
     int baud = 115200;
     int? flashBaud = 921600;
     bool noStub = false;
-    bool noReset = false;
+    ResetMode before = ResetMode.Default;
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -556,7 +596,15 @@ static async Task<int> FlashIdCommandAsync(string[] args)
                 noStub = true;
                 break;
             case "--no-reset":
-                noReset = true;
+                before = ResetMode.NoReset;
+                break;
+            case "--before":
+                if (!TryParseBefore(args[++i], out before))
+                {
+                    Console.Error.WriteLine($"Invalid --before: {args[i - 1]}");
+                    return 2;
+                }
+
                 break;
             default:
                 Console.Error.WriteLine($"Unknown option: {args[i]}");
@@ -576,7 +624,7 @@ static async Task<int> FlashIdCommandAsync(string[] args)
         InitialBaud = baud,
         FlashBaud = flashBaud,
         LoadStub = !noStub,
-        BeforeReset = noReset ? ResetMode.NoReset : ResetMode.Default,
+        BeforeReset = before,
     };
 
     await using Esp32Connection connection = await Esp32Connection.OpenAsync(options);
@@ -587,6 +635,29 @@ static async Task<int> FlashIdCommandAsync(string[] args)
     Console.WriteLine($"Capacity:     0x{(id >> 16) & 0xFF:X2}");
     Console.WriteLine($"Size:         {(sizeBytes is uint s ? $"{s / 1024 / 1024} MB" : "unknown")}");
     return 0;
+}
+
+static bool TryParseBefore(string text, out ResetMode mode)
+{
+    switch (text.ToLowerInvariant())
+    {
+        case "default":
+        case "default_reset":
+            mode = ResetMode.Default;
+            return true;
+        case "usb":
+        case "usb_reset":
+        case "usb-jtag":
+            mode = ResetMode.UsbJtag;
+            return true;
+        case "no":
+        case "no_reset":
+            mode = ResetMode.NoReset;
+            return true;
+        default:
+            mode = ResetMode.Default;
+            return false;
+    }
 }
 
 static bool TryParseFlashMode(string text, out FlashMode? mode)
@@ -671,13 +742,13 @@ static void PrintUsage()
     Console.WriteLine();
     Console.WriteLine("Commands:");
     Console.WriteLine("  list                                        List available serial ports");
-    Console.WriteLine("  chip-info --port <port> [--baud N] [--trace] [--no-reset] [--no-stub]");
+    Console.WriteLine("  chip-info --port <port> [--baud N] [--trace] [--before default_reset|usb_reset|no_reset] [--no-stub]");
     Console.WriteLine("                                              Detect and print chip information");
     Console.WriteLine("  flash-id --port <port>                      Print SPI flash JEDEC ID and size");
     Console.WriteLine("  flash --port <port> [--baud N] [--flash-baud N]");
     Console.WriteLine("        [--flash-size keep|detect|1MB|2MB|4MB|8MB|16MB]");
     Console.WriteLine("        [--flash-mode keep|qio|qout|dio|dout] [--flash-freq keep|80m|40m|26m|20m]");
-    Console.WriteLine("        [--no-stub] [--no-verify] [--no-reset] <offset> <file> [<offset> <file> ...]");
+    Console.WriteLine("        [--no-stub] [--no-verify] [--before default_reset|usb_reset|no_reset] <offset> <file> [<offset> <file> ...]");
     Console.WriteLine("                                              Write one or more images to flash");
     Console.WriteLine("  read-flash --port <port> <offset> <size> [-o <file>]");
     Console.WriteLine("                                              Read flash region to a file");

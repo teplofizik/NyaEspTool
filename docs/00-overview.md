@@ -1,131 +1,126 @@
-# ESP32 Programmer for .NET — Overview / План
+# ESP32 Programmer for .NET — Overview
 
 ## 1. Цель проекта
 
-Сделать нативный .NET-программатор для ESP32 (по аналогии с `esptool` / `esptool.py`),
-достаточный для первой реальной задачи: **прошить ESP32-CAM** (залить
-`bootloader.bin`, `partitions.bin`, `boot_app0.bin`, `firmware.bin` по нужным offset'ам).
+Нативный .NET-программатор для ESP-чипов по аналогии с `esptool`: прошивка, чтение,
+стирание и диагностика через UART или встроенный USB-Serial-JTAG. Без внешних
+зависимостей (только `System.IO.Ports`).
 
-Не цель — 100% копия esptool на первом этапе. Сначала узкий, но рабочий срез,
-архитектура закладывается с расширяемостью на другие чипы (S2/S3/C3) и на
-espefuse/espsecure в будущем.
+Изначально цель была узкой — прошить ESP32-CAM. Сейчас поддерживаются **ESP32, ESP32-S3,
+ESP32-C3, ESP32-C6**, и это по-прежнему не 100% копия esptool: реализован практический
+срез (прошивка/чтение/erase/диагностика), без eFuse/secure boot.
 
-## 2. Ключевые решения (зафиксировано)
+## 2. Ключевые решения
 
 | Вопрос | Решение |
 | --- | --- |
 | Форма | `Core`-библиотека + `Cli` (GUI — позже, поверх Core) |
-| Глубина MVP | ROM-загрузчик + RAM-загрузка **stub** loader'а (как esptool по умолчанию) |
+| Глубина | ROM-загрузчик + RAM-загрузка **stub** loader'а (как esptool по умолчанию) |
 | Платформа | .NET 8 (`net8.0`), `System.IO.Ports` |
-| Платформы ОС | Windows в первую очередь, но код кросс-платформенный |
+| Платформы ОС | Windows в первую очередь, код кросс-платформенный |
+| Чипы | ESP32 (magic), ESP32-S3/C3/C6 (`GET_SECURITY_INFO` chip-id) |
+| Reset | `default_reset` (DTR/RTS), `usb_reset` (USB-Serial-JTAG), `no_reset` |
 
-## 3. Область MVP (scope)
+## 3. Что реализовано
 
-**Делаем:**
-- Открытие serial-порта, управление DTR/RTS, автоматический вход в download mode.
-- SLIP-фрейминг, command/response пакеты, checksum, статусы/ошибки.
-- `SYNC`, детект чипа по magic-регистру (`0x40001000 == 0x00F01D83`).
-- RAM-загрузка stub loader для ESP32 и ожидание `OHAI`.
-- `SPI_ATTACH` + `SPI_SET_PARAMS`.
-- `CHANGE_BAUDRATE` (ускорение после синхронизации).
-- Запись во flash: `FLASH_BEGIN` / `FLASH_DATA` / `FLASH_END` (+ сжатый deflate-вариант позже).
-- Верификация через `SPI_FLASH_MD5`.
+**Протокол**
+- Открытие порта, управление DTR/RTS, вход в download mode (классический и USB-JTAG).
+- SLIP-фрейминг, command/response пакеты, checksum (seed `0xEF`), статусы/ошибки.
+- `SYNC`, детект чипа (`GET_SECURITY_INFO` → chip-id, fallback на magic-регистр).
+- RAM-загрузка stub loader'а + ожидание `OHAI`.
+- `SPI_ATTACH`, `SPI_SET_PARAMS`, `CHANGE_BAUDRATE`.
+- Запись: `FLASH_BEGIN/DATA/END`, блоки 16 КБ, паддинг `0xFF`, ретраи.
+- Верификация `SPI_FLASH_MD5`.
 - Стирание: `ERASE_FLASH`, `ERASE_REGION`.
-- Чтение flash: `READ_FLASH` (через stub).
-- Разбор firmware image header (magic `0xE9`) — для `chip-info`/валидации и merge.
-- CLI: `list-ports`, `chip-info`, `flash-id`, `flash`, `read-flash`, `erase-flash`, `verify`.
+- Чтение: `READ_FLASH` (raw-кадры + ack + MD5-дайджест).
+- `WRITE_REG`/`READ_REG` + `READ_FLASH_ID` (JEDEC) через регистры SPI.
 
-**НЕ делаем в MVP (позже):**
+**Чипы**
+- ESP32, ESP32-S3, ESP32-C3, ESP32-C6: имя, ревизия, MAC, размер flash.
+- Per-chip: SPI-база, bootloader offset (`0x1000` для ESP32, `0x0` для остальных),
+  efuse-база, stub-блоб, схема ревизии.
+
+**Образы**
+- `FirmwareImage` (header/segments/checksum/SHA256), `image-info`.
+- Патчинг заголовка bootloader под `--flash-mode/-freq/-size` (+ пересчёт SHA256).
+
+**CLI**
+- `list`, `chip-info`, `flash-id`, `flash`, `read-flash`, `erase-flash`, `erase-region`,
+  `image-info`; `--trace`, `--before`, `--flash-*`, `--no-stub`, `--no-verify`.
+
+**Проверено на железе**
+- ESP32 (ESP32-CAM, 4 МБ) — полная прошивка 4 образов + verify.
+- ESP32 (16 МБ, CP210x) — chip-info/flash-id.
+- ESP32-S3 (CH343) — detect/stub/read/write.
+- ESP32-C3 (USB-JTAG) — detect/stub/read/write.
+- ESP32-C6 (USB-JTAG) — detect/stub/read/write.
+
+## 4. Не делаем (пока)
+
 - espefuse / espsecure (eFuse, secure boot, flash encryption).
-- Чипы кроме ESP32 (S2/S3/C3/C6/H2...) — закладываем интерфейс, но не реализуем.
-- Прошивка через USB-JTAG-Serial (внутренний USB у S3/C3).
+- Deflate-сжатие (`FLASH_DEFL_*`) — запись несжатая.
+- ESP32-S2, ESP8266.
+- merge-bin и полноценный парсинг partition table.
+- `monitor` (чтение порта), USB-OTG reset.
 - GUI.
 
-## 4. Функциональные требования
-
-1. **Определение портов** — список доступных COM/`/dev/tty*` с описанием.
-2. **Авто-Reset в загрузчик** — последовательность DTR/RTS (классический ESP32),
-   с fallback на ручной режим.
-3. **Идентификация** — имя чипа, ревизия, MAC, размер/тип flash (JEDEC ID).
-4. **Прошивка** — N образов по заданным offset'ам, с опцией `--flash-size detect`
-   и `--flash-mode/-freq`, опционально компрессия (deflate), опциональный верифицирующий MD5.
-5. **Backup/restore** — чтение диапазона flash в файл, запись файла обратно.
-6. **Стирание** — весь чип или регион.
-7. **Прогресс и понятные ошибки** — прогрессбар/колбэк, человекочитаемые сообщения.
-8. **Логирование** — уровень `trace` c дампом «по проводу» (как `esptool --trace`), крайне
-   полезно для отладки протокола.
-
-## 5. Архитектура (высокоуровнево)
+## 5. Архитектура
 
 ```
 Esp32Flasher.Cli  ─┐
                    ├─► Esp32Flasher.Core
 (будущий GUI)    ─┘        │
-                           ├── Serial:   ISerialTransport, SystemSerialTransport, DtrRtsReset
-                           ├── Slip:     SlipCodec (encode/decode, framing, escaping)
-                           ├── Protocol: EspCommand enum, packet builder/parser, Crc/Checksum, Status
-                           ├── Loaders:  EspLoader (ROM), EspStubLoader, StubBlob (ESP32)
-                           ├── Chips:    Esp32Chip (magic, flash params, memory map), IChip
-                           └── Imaging:  FirmwareImage (parser: header/segments/footer), BinMerger
+                           ├── Serial:   ISerialTransport, SystemSerialTransport, SerialPorts
+                           ├── Slip:     SlipCodec, SlipDecoder
+                           ├── Protocol: EspCommand, EspPacket, EspResponse, EspChecksum
+                           ├── Reset:    ResetMode, ResetSequence (Classic/Hard/UsbJtag)
+                           ├── Loaders:  FrameReader, EspLoader
+                           ├── Chips:    ChipConfig, ChipRegistry, StubBlob, StubBlobs
+                           ├── Imaging:  FirmwareImage, ImageFlashParams, FlashImage
+                           └── (root):   Esp32Connection, EspConnectionOptions, FlashOptions, FlashProgress
 ```
 
-Nothing ниже не зависит от CLI. `Core` не знает про `System.Console`.
+`Core` не зависит от CLI и не пишет в `System.Console`.
 
 ## 6. Структура решения
 
 ```
-Esp32Flasher.sln
+Esp32Flasher.slnx
 ├─ src/
 │  ├─ Esp32Flasher.Core/
+│  │  └─ Resources/            esp32_stub.json, esp32s3/esp32c6/esp32c3_stub.json (+ лицензии)
 │  └─ Esp32Flasher.Cli/
 ├─ tests/
 │  └─ Esp32Flasher.Core.Tests/
-└─ docs/
-   ├─ 00-overview.md   (этот файл)
-   ├─ protocol.md
-   ├─ app-api.md
-   ├─ esp32cam.md
-   └─ roadmap.md
+├─ docs/                       этот файл, protocol.md, app-api.md, esp32cam.md, roadmap.md
+└─ README.md                   практическое руководство по использованию
 ```
 
 ## 7. Ссылки и референсы
 
 **Официальные доки Espressif**
-- Serial Protocol (ESP32): https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/serial-protocol.html
+- Serial Protocol: https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/serial-protocol.html
 - Firmware Image Format: https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/firmware-image-format.html
 - Boot Mode Selection: https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/boot-mode-selection.html
-- Entering the Bootloader: https://docs.espressif.com/projects/esptool/en/latest/esp32/esptool/entering-bootloader.html
 - Flasher Stub: https://docs.espressif.com/projects/esptool/en/latest/esp32/esptool/flasher-stub.html
-- SPI Flash Modes: https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/spi-flash-modes.html
 
 **Исходники и эталоны**
-- esptool (Python, эталон): https://github.com/espressif/esptool
-- esp-serial-flasher (C, Espressif): https://github.com/espressif/esp-serial-flasher
-- stub loader: `esptool/targets/stub_flasher/stub_flasher_32.json` (сегменты + entry point)
-- esp32 target: https://github.com/espressif/esptool/blob/master/esptool/targets/esp32.py — magic `0x00F01D83`, таблицы flash size/freq
+- esptool: https://github.com/espressif/esptool
+- stub-блобы: `esptool/targets/stub_flasher/2/{esp32,esp32s3,esp32c6,esp32c3}.json` (MIT/Apache)
+- targets: `esptool/targets/{esp32,esp32s3,esp32c3,esp32c6}.py` (magic, chip-id, SPI-регистры, efuse)
+- esp-serial-flasher (C): https://github.com/espressif/esp-serial-flasher
 
 **Готовые .NET-реализации (референс, не зависимости)**
-- EspDotNet (C#, NuGet `EspDotNet`): https://github.com/KooleControls/EspDotNet
-- ESPTool (C#, NuGet `ESPTool`): https://github.com/multitone/ESPTool (зеркало ghi-electronics/duelink_esptool)
-- nanoframework/nanoFirmwareFlasher: https://github.com/nanoframework/nanofirmwareflasher
+- EspDotNet: https://github.com/KooleControls/EspDotNet
+- ESPTool: https://github.com/multitone/ESPTool
+- nanoFirmwareFlasher: https://github.com/nanoframework/nanofirmwareflasher
 
 **Прочее**
 - SLIP (RFC 1055): https://datatracker.ietf.org/doc/html/rfc1055
 - `System.IO.Ports`: https://learn.microsoft.com/dotnet/api/system.io.ports.serialport
-- ESP32 Datasheet (strapping pins): https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf
-- ESP32-CAM (AI-Thinker) схема/pinout + Arduino core.
 
-## 8. Открытые вопросы (решить до/во время реализации)
+## 8. Критерий готовности (достигнут)
 
-- Сжатие (deflate) в MVP или v1? Влияет на загрузку stub и на `FLASH_DEFL_*`.
-- Верификация MD5 по умолчанию on/off (esptool - on).
-- Как хранить stub-blob: встроенный `byte[]`/`EmbeddedResource` из `stub_flasher_32.json`.
-- Поддержка `--before default_reset` vs `no_reset` (ручной boot) с первого дня — да.
-
-## 9. Критерий готовности MVP
-
-`Esp32Flasher.Cli flash --port COMx --chip esp32 --baud 921600 -z \
-  0x1000 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin 0x10000 firmware.bin`
-
-успешно прошивает ESP32-CAM, затем MD5-верификация проходит, чип перезагружается и
-стартует прошивка. Параллельно `esptool` на тех же файлах даёт тот же результат.
+Прошивка ESP32-CAM четырьмя образами с MD5-верификацией и последующим запуском —
+выполняется (`README.md`, `docs/esp32cam.md`). Дополнительно проверены S3/C3/C6
+(детект, stub, чтение, запись).

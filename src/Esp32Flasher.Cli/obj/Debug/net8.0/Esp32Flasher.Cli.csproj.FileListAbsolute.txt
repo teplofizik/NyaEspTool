@@ -35,3 +35,4 @@ G:\Dev\esp32\src\Esp32Flasher.Cli\obj\Debug\net8.0\refint\Esp32Flasher.Cli.dll
 G:\Dev\esp32\src\Esp32Flasher.Cli\obj\Debug\net8.0\Esp32Flasher.Cli.pdb
 G:\Dev\esp32\src\Esp32Flasher.Cli\obj\Debug\net8.0\Esp32Flasher.Cli.genruntimeconfig.cache
 G:\Dev\esp32\src\Esp32Flasher.Cli\obj\Debug\net8.0\ref\Esp32Flasher.Cli.dll
+G:\Dev\esp32\src\Esp32Flasher.Cli\obj\Debug\net8.0\Esp32Flasher.Cli.sourcelink.json

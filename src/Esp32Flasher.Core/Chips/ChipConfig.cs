@@ -6,6 +6,14 @@ public enum MacReadMode
     MacRegister,
 }
 
+public enum RevisionScheme
+{
+    Esp32,
+    Esp32S3,
+    Esp32C3,
+    Esp32C6,
+}
+
 public sealed record ChipConfig
 {
     public required string Name { get; init; }
@@ -32,9 +40,13 @@ public sealed record ChipConfig
 
     public required MacReadMode MacMode { get; init; }
 
+    public required RevisionScheme Revision { get; init; }
+
     public uint MacRegister { get; init; }
 
     public uint EfuseReadBase { get; init; }
+
+    public uint EfuseBase { get; init; }
 
     public int RamBlockSize { get; init; } = 0x1800;
 }

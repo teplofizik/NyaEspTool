@@ -119,3 +119,4 @@ G:\Dev\esp32\tests\Esp32Flasher.Core.Tests\obj\Debug\net8.0\refint\Esp32Flasher.
 G:\Dev\esp32\tests\Esp32Flasher.Core.Tests\obj\Debug\net8.0\Esp32Flasher.Core.Tests.pdb
 G:\Dev\esp32\tests\Esp32Flasher.Core.Tests\obj\Debug\net8.0\Esp32Flasher.Core.Tests.genruntimeconfig.cache
 G:\Dev\esp32\tests\Esp32Flasher.Core.Tests\obj\Debug\net8.0\ref\Esp32Flasher.Core.Tests.dll
+G:\Dev\esp32\tests\Esp32Flasher.Core.Tests\obj\Debug\net8.0\Esp32Flasher.Core.Tests.sourcelink.json

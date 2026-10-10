@@ -48,16 +48,48 @@ public sealed class EspLoader : IAsyncDisposable
             await _transport.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        _reader.Start();
-
-        if (_options.BeforeReset != ResetMode.NoReset)
+        if (_options.BeforeReset == ResetMode.UsbJtag)
+        {
+            await ResetSequence.UsbJtagAsync(_transport, cancellationToken).ConfigureAwait(false);
+            await ReopenAfterUsbResetAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else if (_options.BeforeReset != ResetMode.NoReset)
         {
             await ResetSequence.ClassicAsync(_transport, _options.ResetDelay, cancellationToken)
                 .ConfigureAwait(false);
         }
 
+        _reader.Start();
         await SyncAsync(cancellationToken).ConfigureAwait(false);
         Chip = await DetectChipAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ReopenAfterUsbResetAsync(CancellationToken cancellationToken)
+    {
+        if (_transport.IsOpen)
+        {
+            return;
+        }
+
+        await _transport.CloseAsync().ConfigureAwait(false);
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _transport.OpenAsync(cancellationToken).ConfigureAwait(false);
+                if (_transport.IsOpen)
+                {
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        throw new EspException(
+            EspError.PortBusy, "The USB port did not come back after reset. Replug the device.");
     }
 
     public async Task SyncAsync(CancellationToken cancellationToken = default)
@@ -143,31 +175,71 @@ public sealed class EspLoader : IAsyncDisposable
         int minor = 0;
         string name = ChipConfig.Name;
 
-        if (ChipConfig.MacMode == MacReadMode.Esp32EfuseWords)
+        switch (ChipConfig.Revision)
         {
-            uint word3 = await ReadRegAsync(Esp32Chip.EfuseWord(3), cancellationToken).ConfigureAwait(false);
-            uint word5 = await ReadRegAsync(Esp32Chip.EfuseWord(5), cancellationToken).ConfigureAwait(false);
-            uint apbCtlDate = await ReadRegAsync(Esp32Chip.ApbCtlDateAddress, cancellationToken)
-                .ConfigureAwait(false);
-
-            int packageVersion = (int)((word3 >> 9) & 0x07);
-            packageVersion += (int)((word3 >> 2) & 0x01) << 3;
-            bool singleCore = (word3 & 0x01) != 0;
-
-            int revBit0 = (int)((word3 >> 15) & 0x01);
-            int revBit1 = (int)((word5 >> 20) & 0x01);
-            int revBit2 = (int)((apbCtlDate >> 31) & 0x01);
-            int combined = (revBit2 << 2) | (revBit1 << 1) | revBit0;
-            major = combined switch
+            case RevisionScheme.Esp32:
             {
-                0 => 0,
-                1 => 1,
-                3 => 2,
-                7 => 3,
-                _ => 0,
-            };
-            minor = (int)((word5 >> 24) & 0x03);
-            name = DescribePackage(packageVersion, major, singleCore);
+                uint word3 = await ReadRegAsync(Esp32Chip.EfuseWord(3), cancellationToken).ConfigureAwait(false);
+                uint word5 = await ReadRegAsync(Esp32Chip.EfuseWord(5), cancellationToken).ConfigureAwait(false);
+                uint apbCtlDate = await ReadRegAsync(Esp32Chip.ApbCtlDateAddress, cancellationToken)
+                    .ConfigureAwait(false);
+
+                int packageVersion = (int)((word3 >> 9) & 0x07);
+                packageVersion += (int)((word3 >> 2) & 0x01) << 3;
+                bool singleCore = (word3 & 0x01) != 0;
+
+                int revBit0 = (int)((word3 >> 15) & 0x01);
+                int revBit1 = (int)((word5 >> 20) & 0x01);
+                int revBit2 = (int)((apbCtlDate >> 31) & 0x01);
+                int combined = (revBit2 << 2) | (revBit1 << 1) | revBit0;
+                major = combined switch
+                {
+                    0 => 0,
+                    1 => 1,
+                    3 => 2,
+                    7 => 3,
+                    _ => 0,
+                };
+                minor = (int)((word5 >> 24) & 0x03);
+                name = DescribePackage(packageVersion, major, singleCore);
+                break;
+            }
+
+            case RevisionScheme.Esp32S3:
+            {
+                uint block1 = ChipConfig.EfuseBase + 0x44;
+                uint block2 = ChipConfig.EfuseBase + 0x5C;
+                uint word5 = await ReadRegAsync(block1 + 20, cancellationToken).ConfigureAwait(false);
+                uint word3 = await ReadRegAsync(block1 + 12, cancellationToken).ConfigureAwait(false);
+                uint block2Word4 = await ReadRegAsync(block2 + 16, cancellationToken).ConfigureAwait(false);
+
+                int rawMinor = (((int)(word5 >> 23) & 0x01) << 3) | (int)((word3 >> 18) & 0x07);
+                int blockMajor = (int)(block2Word4 & 0x03);
+                int blockMinor = (int)((word3 >> 24) & 0x07);
+                bool eco0 = (rawMinor & 0x07) == 0 && blockMajor == 1 && blockMinor == 1;
+                minor = eco0 ? 0 : rawMinor;
+                major = eco0 ? 0 : (int)((word5 >> 24) & 0x03);
+                break;
+            }
+
+            case RevisionScheme.Esp32C3:
+            {
+                uint block1 = ChipConfig.EfuseBase + 0x44;
+                uint word5 = await ReadRegAsync(block1 + 20, cancellationToken).ConfigureAwait(false);
+                uint word3 = await ReadRegAsync(block1 + 12, cancellationToken).ConfigureAwait(false);
+                minor = (((int)(word5 >> 23) & 0x01) << 3) | (int)((word3 >> 18) & 0x07);
+                major = (int)((word5 >> 24) & 0x03);
+                break;
+            }
+
+            case RevisionScheme.Esp32C6:
+            {
+                uint block1 = ChipConfig.EfuseBase + 0x44;
+                uint word3 = await ReadRegAsync(block1 + 12, cancellationToken).ConfigureAwait(false);
+                minor = (int)((word3 >> 18) & 0x0F);
+                major = (int)((word3 >> 22) & 0x03);
+                break;
+            }
         }
 
         return new ChipInfo(name, major, minor, mac);
@@ -191,8 +263,12 @@ public sealed class EspLoader : IAsyncDisposable
 
     public async Task HardResetAsync(CancellationToken cancellationToken = default)
     {
+        bool usb = _options.BeforeReset == ResetMode.UsbJtag;
         await ResetSequence.HardAsync(
-                _transport, TimeSpan.FromMilliseconds(100), TimeSpan.Zero, cancellationToken)
+                _transport,
+                usb ? TimeSpan.FromMilliseconds(200) : TimeSpan.FromMilliseconds(100),
+                usb ? TimeSpan.FromMilliseconds(200) : TimeSpan.Zero,
+                cancellationToken)
             .ConfigureAwait(false);
     }
 

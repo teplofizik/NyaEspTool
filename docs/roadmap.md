@@ -1,67 +1,68 @@
-# Roadmap — план реализации
+# Roadmap
 
 Идём вертикальными срезами: сначала «дойти до чипа», потом «прошить», потом «удобство».
+Ниже — статус на текущий момент. ✅ — сделано и проверено.
 
-## M0. Каркас решения
-- `dotnet new sln`, проекты `Core`, `Cli`, `Core.Tests` (`net8.0`).
-- `Directory.Build.props` (LangVersion, Nullable, TreatWarningsAsErrors).
-- CI-заготовка (build + test), `.editorconfig`.
+## ✅ M0. Каркас решения
+- `Esp32Flasher.slnx`, проекты `Core`, `Cli`, `Core.Tests` (`net8.0`).
+- `Directory.Build.props`, `.editorconfig`.
 
-## M1. Транспорт + SLIP + пакеты
+## ✅ M1. Транспорт + SLIP + пакеты
 - `ISerialTransport`, `SystemSerialTransport`, `SerialPorts.List()`.
-- `SlipCodec` (encode/decode, escaping).
-- `EspPacket`/`EspResponse`, сборка/парсинг, `Checksum` (seed 0xEF).
+- `SlipCodec` (encode + stateless decode), `SlipDecoder` (потоковый).
+- `EspPacket`/`EspResponse`, `EspChecksum` (seed `0xEF`).
 - Юнит-тесты (в т.ч. golden-байты из `esptool --trace`).
-- **Проверка:** `list` показывает порт; round-trip пакетов проходит тесты.
 
-## M2. SYNC + детект чипа (ROM)
-- ClassicReset (DTR/RTS), `SYNC` с ретраями.
+## ✅ M2. SYNC + детект чипа (ROM)
+- `ClassicReset` (DTR/RTS), `SYNC` с ретраями, `FrameReader` (read-pump).
 - `READ_REG(0x40001000)` → ESP32 `0x00F01D83`, имя/ревизия/MAC.
-- `READ_FLASH_ID` (через регистры SPI) → JEDEC + размер.
-- **Проверка:** `chip-info` на реальной ESP32-CAM печатает имя и 4 МБ.
+- `READ_FLASH_ID` (через SPI-регистры) → JEDEC + размер.
+- Проверено на ESP32-CAM.
 
-## M3. Stub loader
-- Загрузка `stub_flasher_32.json` как embedded resource → `MEM_BEGIN/DATA/END`.
-- Ожидание `OHAI`, переключение `EspLoader` → `EspStubLoader`.
-- `SPI_ATTACH` + `SPI_SET_PARAMS`, `CHANGE_BAUDRATE` + переоткрытие на новой скорости.
+## ✅ M3. Stub loader
+- Встроенный stub-блоб → `MEM_BEGIN/DATA/END`, ожидание `OHAI`.
+- `SPI_ATTACH` + `SPI_SET_PARAMS`, `CHANGE_BAUDRATE`.
 - `--no-stub` fallback.
-- **Проверка:** после загрузки stub команды идут на 921600.
 
-## M4. Flash write + verify (ядро MVP)
-- `FLASH_BEGIN/DATA/END`, блок 16 КБ, паддинг `0xFF`, ретраи блока.
-- Мультиобраз (список offset→bytes), правильный reboot только на последнем.
-- `SPI_FLASH_MD5`-верификация.
-- Прогресс через `IProgress<FlashProgress>`.
-- **Проверка:** `flash` прошивает ESP32-CAM; `esptool verify` совпадает.
+## ✅ M4. Flash write + verify
+- `FLASH_BEGIN/DATA/END`, блок 16 КБ, паддинг `0xFF`, ретраи.
+- Мультиобраз (offset→bytes), reboot в конце.
+- `SPI_FLASH_MD5`-верификация, `IProgress<FlashProgress>`.
+- Проверено: прошивка ESP32-CAM.
 
-## M5. Read / Erase + польза
+## ✅ M5. Read / Erase / образы
 - `ERASE_FLASH`, `ERASE_REGION`.
-- `READ_FLASH` (stub, raw-пакеты + ack), сохранение дампа.
-- `FirmwareImage` парсер (header/segments/footer), `chip-info --image file.bin`,
-  `ImageMerger` (merge bin).
-- **Проверка:** backup/restore полного 4 МБ образа совпадает по MD5.
+- `READ_FLASH` (raw-кадры + ack + MD5-дайджест).
+- `FirmwareImage` (header/segments/footer/SHA256), `image-info`.
 
-## M6. Полировка MVP
-- `--trace` (дамп TX/RX «по проводу»).
-- Человекочитаемые ошибки (`EspError`), коды возврата CLI.
-- README + docs согласованы, help у CLI.
-- **Проверка:** полный сценарий ESP32-CAM «с нуля» по `docs/esp32cam.md`.
+## ✅ M6. Режимы + полировка
+- `--flash-mode/-freq/-size` (+ `detect`), патчинг заголовка bootloader с пересчётом SHA256.
+- `--trace` (дамп TX/RX), человекочитаемые ошибки (`EspError`), коды возврата.
+- `README.md` + docs.
+
+## ✅ M7. Мульти-чип + USB-JTAG
+- `ChipConfig`/`ChipRegistry`: ESP32 (magic), ESP32-S3/C3/C6 (`GET_SECURITY_INFO` chip-id).
+- Per-chip: SPI-регистры, bootloader offset, efuse/MAC, схема ревизии, stub-блобы.
+- `--before default_reset|usb_reset|no_reset`; USB-JTAG reset + переподключение порта.
+- Проверено на железе: ESP32, ESP32-S3, ESP32-C3, ESP32-C6.
 
 ---
 
-## v1 (после MVP)
-- Deflate-сжатие (`FLASH_DEFL_*`) как основной путь (в MVP — опция).
-- Другие чипы: ESP32-S3, C3, C6 (свои stub + magic/GET_SECURITY_INFO).
-- `GET_SECURITY_INFO`, flash encryption detection (только чтение статусов).
-- GUI (Avalonia) поверх `Core`: порт, чип-инфо, выбор файлов/offset'ов, прогресс, лог.
+## v1 (в работе)
+- ✅ Другие чипы: ESP32-S3, C3, C6.
+- ✅ USB-JTAG reset (S3/C3/C6).
+- ⬜ Deflate-сжатие (`FLASH_DEFL_*`) — быстрее прошивка.
+- ⬜ ESP32-S2 (magic fallback + свой stub).
+- ⬜ merge-bin и парсинг partition table.
+- ⬜ `monitor` (чтение порта), USB-OTG reset.
 
 ## v2 (идеи)
-- espefuse / espsecure (eFuse, подписи, шифрование) — большой отдельный кусок.
-- USB-JTAG-Serial reset (внутренний USB у S3/C3).
-- Автосканирование и «прошивка одной кнопкой» из образа (merge + write + verify).
-- Интеграция с PlatformIO/Arduino build outputs (авто-парсинг offset'ов из esptool args).
+- espefuse / espsecure (eFuse, подписи, шифрование).
+- GUI (Avalonia) поверх `Core`.
+- «Прошивка одной кнопкой» из merged-образа.
+- Интеграция с PlatformIO/Arduino build outputs (авто-offset'ы).
 
-## Порядок работ в репозитории
-1. M0 → M1 (чистое ядро, тесты) — можно делать/проверять без железа.
-2. M2 → M4 (нужно железо ESP32-CAM + кабель).
-3. M5 → M6, затем v1.
+## Порядок работ (исторически)
+1. M0 → M1 — чистое ядро, тесты без железа.
+2. M2 → M4 — железо ESP32-CAM.
+3. M5 → M7 — read/erase, режимы, мульти-чип.
